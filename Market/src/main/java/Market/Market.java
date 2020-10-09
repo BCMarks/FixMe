@@ -147,4 +147,9 @@ public class Market {
     public String getMarketID() {
         return marketID;
     }
+
+    private void sendMessage(SocketChannel recipient, String msg) throws IOException {
+        ByteBuffer buffer = ByteBuffer.wrap(msg.getBytes());
+        recipient.write(buffer);
+    }
 }

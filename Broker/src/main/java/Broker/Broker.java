@@ -67,10 +67,12 @@ public class Broker {
             Boolean connected = processConnect(key);
             SocketChannel sc = (SocketChannel) key.channel();
             //make connection to router, get id
+            /*
             if (!ID.equals("")) {
                 ByteBuffer bb = ByteBuffer.wrap(ID.getBytes());
                 sc.write(bb);
             }
+            */
             if (!connected) {
                 return true;
             }
@@ -84,20 +86,24 @@ public class Broker {
             String result = new String(bb.array()).trim();
             if (brokerID.equals("")) {
                 brokerID = result;
+            } else {
+                System.out.println("Message received from Server: " + result + " Message length= "+ result.length());
             }
-            System.out.println("Message received from Server: " + result + " Message length= "+ result.length());
             awaitingResponse = false;
         }
         if (key.isWritable()) {
             //send message
             if (!awaitingResponse) {
+                FIXMessage msg = new FIXMessage(input, brokerID);
+                /*
                 System.out.print("Type a message (type quit to stop): ");
                 String msg = input.readLine(); //blocks client from receiving messages
                 if (msg.equalsIgnoreCase("quit")) {
                     return true;
                 }
+                */
                 SocketChannel sc = (SocketChannel) key.channel();
-                ByteBuffer bb = ByteBuffer.wrap(msg.getBytes());
+                ByteBuffer bb = ByteBuffer.wrap((msg.getMessage()).getBytes());
                 sc.write(bb);
                 awaitingResponse = true;
             }
@@ -139,5 +145,10 @@ public class Broker {
 */
     public String getBrokerID() {
         return brokerID;
+    }
+
+    private void sendMessage(SocketChannel recipient, String msg) throws IOException {
+        ByteBuffer buffer = ByteBuffer.wrap(msg.getBytes());
+        recipient.write(buffer);
     }
 }
