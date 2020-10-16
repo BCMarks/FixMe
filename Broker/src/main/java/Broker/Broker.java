@@ -24,14 +24,12 @@ public class Broker {
     private PrintWriter output;
     private static SocketChannel sc;
 
-    Broker(String ID) {
+    Broker() {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
-               closeSocketChannel();
+                closeSocketChannel();
             }
         });
-
-        System.out.println("I AM A BROKER!!!");
         try {
             InetSocketAddress addr = new InetSocketAddress(InetAddress.getByName("localhost"), brokerPort);
             Selector selector = Selector.open();
@@ -42,7 +40,7 @@ public class Broker {
             input = new BufferedReader(new InputStreamReader(System.in));
             while (true) {
                 if (selector.select() > 0) {
-                    Boolean doneStatus = processReadySet(selector.selectedKeys(), ID);
+                    Boolean doneStatus = processReadySet(selector.selectedKeys());
                     if (doneStatus) {
                         break;
                     }
@@ -50,11 +48,11 @@ public class Broker {
             }
             sc.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Connection issues have arisen.");
         }
     }
 
-    public static Boolean processReadySet(Set readySet, String ID) throws Exception {
+    public static Boolean processReadySet(Set readySet) throws Exception {
         SelectionKey key = null;
         Iterator iterator = null;
         boolean awaitingResponse = true;
@@ -66,13 +64,6 @@ public class Broker {
         if (key.isConnectable()) {
             Boolean connected = processConnect(key);
             SocketChannel sc = (SocketChannel) key.channel();
-            //make connection to router, get id
-            /*
-            if (!ID.equals("")) {
-                ByteBuffer bb = ByteBuffer.wrap(ID.getBytes());
-                sc.write(bb);
-            }
-            */
             if (!connected) {
                 return true;
             }
@@ -87,27 +78,33 @@ public class Broker {
             if (brokerID.equals("")) {
                 brokerID = result;
             } else {
-                System.out.println("Message received from Server: " + result + " Message length= "+ result.length());
+                System.out.println("[ROUTER] " + result);
+                try {
+                    FIXMessage msg = new FIXMessage(result);
+                    msg.printStatus();
+                } catch (Exception e) {
+                    // Router messages do not follow fix format
+                }
             }
             awaitingResponse = false;
         }
         if (key.isWritable()) {
             //send message
             if (!awaitingResponse) {
-                FIXMessage msg = new FIXMessage(input, brokerID);
-                /*
-                System.out.print("Type a message (type quit to stop): ");
-                String msg = input.readLine(); //blocks client from receiving messages
-                if (msg.equalsIgnoreCase("quit")) {
-                    return true;
+                try {
+                    FIXMessage msg = new FIXMessage(input, brokerID);
+                    SocketChannel sc = (SocketChannel) key.channel();
+                    ByteBuffer bb = ByteBuffer.wrap((msg.getMessage()).getBytes());
+                    sc.write(bb);
+                    awaitingResponse = true;
+                } catch (IOException e) {
+                    System.out.println("Connection issues have arisen.");
+                    System.exit(1);
+                } catch (Exception e) {
+                    System.exit(1);
                 }
-                */
-                SocketChannel sc = (SocketChannel) key.channel();
-                ByteBuffer bb = ByteBuffer.wrap((msg.getMessage()).getBytes());
-                sc.write(bb);
-                awaitingResponse = true;
+                
             }
-            //Thread.sleep(200);
         }
         return false;
     }
@@ -120,7 +117,7 @@ public class Broker {
             }
         } catch (IOException e) {
             key.cancel();
-            e.printStackTrace();
+            System.out.println("Router is offline.");
             return false;
         }
         return true;
@@ -129,20 +126,12 @@ public class Broker {
     public static void closeSocketChannel() {
         try {
             sc.close();
+            System.out.println("\nDisconnecting...");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-    /*
-    private void sendResponse(String order) {
-        try {
-            output.println(order);
-            System.out.println(input.readLine());
-        } catch (Exception e) {
-            System.err.println(e);
-        }
-    }
-*/
+
     public String getBrokerID() {
         return brokerID;
     }

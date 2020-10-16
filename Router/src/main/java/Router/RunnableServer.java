@@ -29,16 +29,16 @@ public class RunnableServer implements Runnable {
         try {
             switch (port) {
                 case 5000:
-                    serverType = "Broker";
+                    serverType = "BROKER";
                     break;
                 case 5001:
-                    serverType = "Market";
+                    serverType = "MARKET";
                     break;
                 default:
                     System.out.println("Unchecked port detected. Terminating...");
                     System.exit(0);
             }
-            System.out.println("Router listening to "+serverType+"s on port "+port);
+            System.out.println("[ROUTER] Listening to "+serverType+"s on port "+port);
             awaitMessages();
         } catch(Exception e) {
             System.out.println("Router: "+e);
@@ -61,14 +61,16 @@ public class RunnableServer implements Runnable {
                         //on connection
                         try {
                             SocketChannel sc = channel.accept();
-                            sc.configureBlocking(false);
-                            sc.register(selector, SelectionKey.OP_READ);
-                            Client client = new Client(sc, assignID(sc));
-                            sendMessage(sc, client.getClientID());
-                            Router.addClient(port, client);
-                            System.out.println("Connection Accepted from "+serverType+"_"+sc.socket().getPort()+" on "+ sc.getLocalAddress() + "\n");
+                            if (sc != null) {
+                                sc.configureBlocking(false);
+                                sc.register(selector, SelectionKey.OP_READ);
+                                Client client = new Client(sc, assignID(sc));
+                                sendMessage(sc, client.getClientID());
+                                Router.addClient(port, client);
+                                System.out.println("[ROUTER] Connection Accepted from "+serverType+"_"+client.getClientID()+" on port "+port);
+                            }
                         } catch (Exception e) {
-                            System.out.println("Server port: "+port+"| Wrong port bub");
+                            e.printStackTrace();
                         }
                     }
                     if (key.isReadable()) {
@@ -78,18 +80,19 @@ public class RunnableServer implements Runnable {
                             ByteBuffer bb = ByteBuffer.allocate(1024);
                             sc.read(bb);
                             String result = new String(bb.array()).trim();
-                            String response = handleMessage(sc, result);
-                            System.out.println("Message received from "+serverType+"_"+sc.socket().getPort()+": "+ result + " Message length= " + result.length());
-                            System.out.println(response);
                             if (result.length() <= 0) {
+                                Client client = Router.getClientBySocketChannel(port, sc);
+                                if (client != null) {
+                                    System.out.println("[ROUTER] "+serverType+"_"+client.getClientID()+" has disconnected.");
+                                    Router.removeClient(port, client);
+                                }
                                 sc.close();
-                                System.out.println("Connection closed...");
-                                System.out.println("Server will keep running. Try running another client to re-establish connection");
-                            }
-                        } 
-                        /*else {
-                            System.out.println(serverType+": Its not your time "+sc.socket().getPort());
-                        }*/
+                            } else {
+                                handleMessage(sc, result);
+                                String clientID = extractTag(result, "49=");
+                                System.out.println("["+serverType+"_"+clientID+"] "+ result);
+                            }                            
+                        }
                     }
                 }
             }
@@ -99,45 +102,50 @@ public class RunnableServer implements Runnable {
         }
     }
 
-    private String handleMessage(SocketChannel sender, String order) {
-        //actual order needs to be parsed. this is temporary
-        switch (order) {
-            case "greeting": //not needed
-                try {
-                    sendMessage(sender, "welcome");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                return "welcome";
-            case "buy":
-            case "sell":
-                for (Client client : Router.getClients(5001)) {
-                    try {
-                        //System.out.println(client.getClientID());
-                        sendMessage(client.getSocketChannel(), order);
-                    } catch (Exception e) {
-            
-                    }
-                }
-                return order;
-            case "ok i accept buy":
-            case "ok i accept sell":
-                for (Client client : Router.getClients(5000)) {
-                    try {
-                        sendMessage(client.getSocketChannel(), order);
-                    } catch (Exception e) {
-            
-                    }
-                }
-                return order;
-            default:
-                try {
-                    sendMessage(sender, "INVALID REQUEST");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                return "Unrecognized command";
+    private void handleMessage(SocketChannel sender, String order) throws IOException {
+        if (isValidMessage(order)) {
+            int destinationPort = 5000;
+            if (destinationPort == port) {
+                destinationPort += 1;
+            }
+            String id = extractTag(order, "56=");
+            Client recipient = Router.getClient(destinationPort, id);
+            if (recipient != null) {
+                sendMessage(recipient.getSocketChannel(), order);
+            } else {
+                sendMessage(sender, "Target market is not online or does not exist.");
+            }
         }
+    }
+
+    private boolean isValidMessage(String msg) {
+        String delim = String.valueOf((char) 1);
+        String[] segments = msg.split(delim);
+        int total = 0;
+        for (int i = 0; i < segments.length - 1; i++) {
+            for (char c : segments[i].toCharArray()) {
+                total += (int) c;
+            }
+            total += 1;
+        }
+        total %= 256;
+
+        int tag = 0;
+        try {
+            tag = Integer.parseInt(extractTag(msg, "10="));
+        } catch (Exception e) {
+            return false;
+        }
+
+        if (total == tag) {
+            return true;
+        }
+        return false;
+    }
+
+    private String extractTag(String msg, String tag) {
+        String delim = String.valueOf((char) 1);
+        return ((msg.split(tag))[1].split(delim))[0];
     }
 
     private String assignID(SocketChannel sc) {
@@ -148,8 +156,20 @@ public class RunnableServer implements Runnable {
             output.append("0");
         }
         output.append(strID);
-        return output.toString();
-        //check for no dupes
+        String tempID = output.toString();
+        if (isUniqueID(tempID)) {
+            return tempID;
+        } else {
+            return assignID(sc);
+        }
+    }
+
+    private boolean isUniqueID(String idToCheck) {
+        Client client = Router.getClient(port, idToCheck);
+        if (client != null) {
+            return false;
+        }
+        return true;
     }
 
     private void sendMessage(SocketChannel recipient, String msg) throws IOException {

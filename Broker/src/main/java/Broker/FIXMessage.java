@@ -18,19 +18,7 @@ public class FIXMessage {
     private static String checksum; //10
     private String msg;
 
-    /*
-    FIXMessage(String msgType, String senderID, String targetID, String side, String symbol, String quantity, String price, String status) {
-        this.msgType = msgType.concat(delim);
-        this.senderID = senderID.concat(delim);
-        this.targetID = targetID.concat(delim);
-        this.side = side.concat(delim);
-        this.symbol = symbol.concat(delim);
-        this.quantity = quantity.concat(delim);
-        this.price = price.concat(delim);
-        this.status = status.concat(delim);
-        constructMessage();
-    }
-*/
+    //For when the broker sends a buy/sell request
     FIXMessage(BufferedReader input, String clientID) {
         try {
             msgType = "D".concat(delim);
@@ -43,9 +31,21 @@ public class FIXMessage {
             price(input);
             constructMessage();
         } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("oops");
+            //null pointer exception from disconnecting
         }
+    }
+
+    FIXMessage(String msg) {
+        this.msg = msg;
+        String[] msgSplit = msg.split(delim);
+        msgType = (msgSplit[2].split("="))[1].concat(delim);
+        targetID = (msgSplit[3].split("="))[1].concat(delim);
+        senderID = (msgSplit[4].split("="))[1].concat(delim);
+        side = (msgSplit[5].split("="))[1].concat(delim);
+        symbol = (msgSplit[6].split("="))[1].concat(delim);
+        quantity = (msgSplit[7].split("="))[1].concat(delim);
+        price = (msgSplit[8].split("="))[1].concat(delim);
+        status = (msgSplit[9].split("="))[1].concat(delim);
     }
 
     private void side(BufferedReader input) throws IOException {
@@ -68,7 +68,12 @@ public class FIXMessage {
     private void symbol(BufferedReader input) throws IOException {
         System.out.print("Which Instrument? ");
         String txt = input.readLine(); //blocks client from receiving messages
-        symbol = txt.concat(delim);
+        if (txt.matches("^[a-zA-Z0-9]*$")) {
+            symbol = txt.concat(delim);
+        } else {
+            System.out.println("Invalid Response: Instrument name must only contain alphanumeric characters.");
+            symbol(input);
+        }
     }
 
     private void quantity(BufferedReader input) throws IOException {
@@ -129,16 +134,6 @@ public class FIXMessage {
     }
 
     private void calculateBodyLength() {
-        /*
-        System.out.println("msgType: "+msgType);
-        System.out.println("senderID: "+senderID);
-        System.out.println("targetID: "+targetID);
-        System.out.println("side: "+side);
-        System.out.println("symbol: "+symbol);
-        System.out.println("quantity: "+quantity);
-        System.out.println("price: "+price);
-        System.out.println("status: "+status);
-        */
         bodyLength = msgType.length() + senderID.length() + targetID.length() + side.length() +
             symbol.length() + quantity.length() + price.length() + status.length() + 24; // 8 tags of length 3 each
     }
@@ -178,5 +173,15 @@ public class FIXMessage {
 
     public String getMessage() {
         return msg;
+    }
+
+    public void printStatus() {
+        if ("2".equals(status.trim())) {
+            System.out.println("Order has been Accepted.");
+        } else if ("8".equals(status.trim())) {
+            System.out.println("Order has been Rejected.");
+        } else {
+            System.out.println("Order could not be processed.");
+        }
     }
 }

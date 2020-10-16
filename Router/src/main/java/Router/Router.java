@@ -4,6 +4,7 @@ import java.net.*;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -19,8 +20,6 @@ public class Router {
     private Selector selector;
     private static ArrayList<Client> brokerClients = new ArrayList<Client>();
     private static ArrayList<Client> marketClients = new ArrayList<Client>();
-    // private Client[] brokerList;
-    // private Client[] marketList;
 
     Router() {
         try {
@@ -41,7 +40,7 @@ public class Router {
     }
 
     public void startRouter() {
-        System.out.println("Router is starting...");
+        System.out.println("[ROUTER] Starting...");
         ExecutorService threads = Executors.newFixedThreadPool(2);
         threads.submit(new RunnableServer(marketServer, selector));
         threads.submit(new RunnableServer(brokerServer, selector));
@@ -79,5 +78,25 @@ public class Router {
         } else {
             return marketClients;
         }
+    }
+
+    public static Client getClient(int port, String id) {
+        ArrayList<Client> list = getClients(port);
+        for (Client client : list) {
+            if (client.getClientID().equals(id)) {
+                return client;
+            }
+        }
+        return null;
+    }
+
+    public static Client getClientBySocketChannel(int port, SocketChannel sc) {
+        ArrayList<Client> list = getClients(port);
+        for (Client client : list) {
+            if (client.getSocketChannel().equals(sc)) {
+                return client;
+            }
+        }
+        return null;
     }
 }

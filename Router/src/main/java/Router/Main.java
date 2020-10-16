@@ -5,7 +5,7 @@ public class Main {
         try {
             new Router();
         } catch (Exception e) {
-            System.out.println(e);
+            e.printStackTrace();
         }
     }
 }

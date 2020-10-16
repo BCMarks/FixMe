@@ -23,17 +23,15 @@ public class Market {
     private static BufferedReader input = null;
     private PrintWriter output;
     private static SocketChannel sc;
-    private ArrayList<Instrument> instruments;
+    private static ArrayList<Instrument> instruments;
 
-    Market(ArrayList<Instrument> instruments) {
+    Market(ArrayList<Instrument> instrumentList) {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
                closeSocketChannel();
             }
         });
-
-        System.out.println("I AM A MARKET!!!");
-        this.instruments = instruments;
+        instruments = instrumentList;
         try {
             InetSocketAddress addr = new InetSocketAddress(InetAddress.getByName("localhost"), marketPort);
             Selector selector = Selector.open();
@@ -52,7 +50,7 @@ public class Market {
             }
             sc.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Connection issues have arisen.");
         }
     }
 
@@ -67,7 +65,6 @@ public class Market {
         if (key.isConnectable()) {
             Boolean connected = processConnect(key);
             SocketChannel sc = (SocketChannel) key.channel();
-            //make connection to router, get id
             if (!connected) {
                 return true;
             }
@@ -78,38 +75,18 @@ public class Market {
             ByteBuffer bb = ByteBuffer.allocate(1024);
             sc.read(bb);
             String result = new String(bb.array()).trim();
-            System.out.println("Message received from Server: " + result + " Message length= "+ result.length());
+            System.out.println("[ROUTER] " + result);
             ByteBuffer response;
             if (marketID.equals("")) {
                 marketID = result;
             } else {
-                switch (result) {
-                    case "buy":
-                        response = ByteBuffer.wrap("ok i accept buy".getBytes());
-                        break;
-                    case "sell":
-                        response = ByteBuffer.wrap("ok i accept sell".getBytes());
-                        break;
-                    default:
-                        response = ByteBuffer.wrap("REJECTED".getBytes());
-                        break;
-                }
+                FIXMessage msg = new FIXMessage(result);
+                msg.prepareResponse(instruments);
+                response = ByteBuffer.wrap((msg.getMessage()).getBytes());
+                System.out.println("[MARKET_"+marketID+"] "+msg.getMessage());
                 sc.write(response);
             }
         }
-        /*
-        if (key.isWritable()) {
-            //send message
-            System.out.print("Type a message (type quit to stop): ");
-            String msg = input.readLine(); //blocks client from receiving messages
-            if (msg.equalsIgnoreCase("quit")) {
-                return true;
-            }
-            SocketChannel sc = (SocketChannel) key.channel();
-            ByteBuffer bb = ByteBuffer.wrap(msg.getBytes());
-            sc.write(bb);
-        }
-        */
         return false;
     }
 
@@ -121,7 +98,7 @@ public class Market {
             }
         } catch (IOException e) {
             key.cancel();
-            e.printStackTrace();
+            System.out.println("Router is offline.");
             return false;
         }
         return true;
@@ -130,20 +107,12 @@ public class Market {
     public static void closeSocketChannel() {
         try {
             sc.close();
+            System.out.println("Disconnecting...");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-    /*
-    private void sendResponse(String order) {
-        try {
-            output.println(order);
-            System.out.println(input.readLine());
-        } catch (Exception e) {
-            System.err.println(e);
-        }
-    }
-*/
+
     public String getMarketID() {
         return marketID;
     }
