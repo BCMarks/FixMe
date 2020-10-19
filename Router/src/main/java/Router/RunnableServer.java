@@ -40,7 +40,7 @@ public class RunnableServer implements Runnable {
             }
             System.out.println("[ROUTER] Listening to "+serverType+"s on port "+port);
             awaitMessages();
-        } catch(Exception e) {
+        } catch (Exception e) {
             System.out.println("Router: "+e);
         }
     }
@@ -97,8 +97,8 @@ public class RunnableServer implements Runnable {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("Awaiting messages ("+serverType+"): "+e);
+            System.out.println("Something went wrong. Terminating...");
+            System.exit(1);
         }
     }
 

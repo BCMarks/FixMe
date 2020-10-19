@@ -34,7 +34,7 @@ public class Router {
             marketServer.register(selector, SelectionKey.OP_ACCEPT);
             startRouter();
         } catch (Exception e) {
-            System.err.println(e);
+            System.out.println("The Router is already running somewhere.");
             stopRouter();
         }
     }
